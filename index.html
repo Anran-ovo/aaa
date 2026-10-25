@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyberpunk Matrix // 时空引力场</title>
+<style>
+    body, html {
+        margin: 0; padding: 0; width: 100%; height: 100%;
+        background-color: #03060a; /* 极暗深蓝 */
+        overflow: hidden;
+        font-family: 'Courier New', Courier, monospace; /* 极客字体 */
+        cursor: crosshair;
+    }
+
+    /* 画布层 */
+    #matrix-canvas {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 1;
+    }
+
+    /* 赛博朋克UI覆盖层 */
+    .ui-overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 10; pointer-events: none; /* 让鼠标穿透，不影响点击 */
+        display: flex; flex-direction: column; justify-content: space-between;
+        padding: 20px; box-sizing: border-box;
+        color: #0ff; /* 青色霓虹 */
+        text-shadow: 0 0 5px #0ff, 0 0 10px #0ff;
+    }
+
+    .header {
+        display: flex; justify-content: space-between;
+        font-size: 12px; letter-spacing: 2px;
+        border-bottom: 1px solid rgba(0, 255, 255, 0.3);
+        padding-bottom: 10px;
+    }
+
+    .footer {
+        font-size: 12px; letter-spacing: 2px;
+        text-align: center;
+        border-top: 1px solid rgba(255, 0, 255, 0.3); /* 粉色霓虹 */
+        padding-top: 10px; color: #f0f;
+        text-shadow: 0 0 5px #f0f, 0 0 10px #f0f;
+    }
+
+    /* 中心悬浮提示 */
+    .center-hint {
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        pointer-events: none;
+        z-index: 5;
+        transition: opacity 1s;
+    }
+
+    .center-hint h1 {
+        font-size: 24px; color: #fff;
+        letter-spacing: 8px;
+        text-shadow: 0 0 10px #fff, 0 0 20px #0ff, 0 0 40px #0ff;
+        margin-bottom: 10px;
+        animation: pulse 2s infinite alternate;
+    }
+    
+    .center-hint p {
+        font-size: 14px; color: #0ff; letter-spacing: 2px;
+    }
+
+    @keyframes pulse {
+        0% { opacity: 0.7; transform: scale(0.98); }
+        100% { opacity: 1; transform: scale(1.02); }
+    }
+
+    /* 扫描线效果 */
+    .scanlines {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
+        background-size: 100% 4px;
+        z-index: 20; pointer-events: none; opacity: 0.3;
+    }
+
+</style>
+</head>
+<body>
+
+    <!-- 扫描线效果 -->
+    <div class="scanlines"></div>
+
+    <!-- UI层 -->
+    <div class="ui-overlay">
+        <div class="header">
+            <span>SYS.ONLINE // 2024</span>
+            <span>DATA_STREAM_ACTIVE</span>
+        </div>
+        <div class="footer">
+            <span>GRAVITY_WELL_INITIALIZED // MOVE TO INTERACT</span>
+        </div>
+    </div>
+
+    <!-- 提示文字 -->
+    <div class="center-hint" id="hint">
+        <h1>MOVE YOUR MOUSE</h1>
+        <p>移动鼠标或手指，探索引力矩阵</p>
+    </div>
+
+    <!-- Canvas -->
+    <canvas id="matrix-canvas"></canvas>
+
+<script>
+    // ==========================================
+    // 核心逻辑：3D隧道 + 2D引力粒子系统
+    // ==========================================
+    
+    const canvas = document.getElementById('matrix-canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height, cx, cy;
+
+    // 鼠标/触摸坐标
+    let mouse = { x: null, y: null, active: false };
+
+    // 调整尺寸
+    function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+        cx = width / 2;
+        cy = height / 2;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // 交互监听
+    window.addEventListener('mousemove', (e) => {
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+        if (!mouse.active) {
+            mouse.active = true;
+            document.getElementById('hint').style.opacity = '0'; // 隐藏提示
+        }
+    });
+
+    window.addEventListener('touchmove', (e) => {
+        let touch = e.touches[0];
+        mouse.x = touch.clientX;
+        mouse.y = touch.clientY;
+        if (!mouse.active) {
+            mouse.active = true;
+            document.getElementById('hint').style.opacity = '0';
+        }
+    }, { passive: true });
+
+    // ==========================================
+    // 1. 3D 时空隧道 (背景)
+    // ==========================================
+    const tunnelLines = [];
+    const NUM_LINES = 60;
+
+    class TunnelLine {
+        constructor() {
+            this.reset();
+        }
+        reset() {
+            this.angle = Math.random() * Math.PI * 2;
+            this.radius = 0;
+            this.z = Math.random() * 1000; // 深度
+            this.speed = Math.random() * 3 + 2;
+            this.color = Math.random() > 0.5 ? '#0ff' : '#f0f';
+        }
+        update() {
+            this.z -= this.speed;
+            if (this.z < 1) {
+                this.reset();
+            }
+        }
+        draw() {
+            // 将3D坐标映射到2D屏幕
+            const x = cx + Math.cos(this.angle) * (this.radius + this.z) * 2;
+            const y = cy + Math.sin(this.angle) * (this.radius + this.z) * 2;
+            
+            // 根据z轴深度计算透明度（越远越暗）
+            const alpha = (1000 - this.z) / 1000;
+            
+            // 画线
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(x, y);
+            ctx.strokeStyle = this.color;
+            ctx.globalAlpha = alpha * 0.3;
+            ctx.lineWidth = (1000 - this.z) / 500;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    for (let i = 0; i < NUM_LINES; i++) {
+        let line = new TunnelLine();
+        line.z = Math.random() * 1000; // 打散初始位置
+        tunnelLines.push(line);
+    }
+
+    // ==========================================
+    // 2. 2D 引力粒子系统 (前景)
+    // ==========================================
+    const particles = [];
+    const NUM_PARTICLES = 150;
+    const CONNECTION_DIST = 120; // 连线距离
+
+    class Particle {
+        constructor() {
+            this.x = Math.random() * width;
+            this.y = Math.random() * height;
+            this.vx = (Math.random() - 0.5) * 1.5; // 初始随机速度
+            this.vy = (Math.random() - 0.5) * 1.5;
+            this.size = Math.random() * 2 + 1;
+        }
+
+        update() {
+            // 移动
+            this.x += this.vx;
+            this.y += this.vy;
+
+            // 边界反弹
+            if (this.x < 0 || this.x > width) this.vx *= -1;
+            if (this.y < 0 || this.y > height) this.vy *= -1;
+
+            // 鼠标引力逻辑
+            if (mouse.active) {
+                let dx = mouse.x - this.x;
+                let dy = mouse.y - this.y;
+                let dist = Math.sqrt(dx * dx + dy * dy);
+                
+                // 如果在引力范围内
+                if (dist < 250) {
+                    // 施加向鼠标方向的力（引力）
+                    let force = (250 - dist) / 250;
+                    this.vx += (dx / dist) * force * 0.2;
+                    this.vy += (dy / dist) * force * 0.2;
+                }
+            }
+
+            // 摩擦力/阻力（防止速度无限增加）
+            this.vx *= 0.98;
+            this.vy *= 0.98;
+
+            // 保持一个基础游荡速度
+            if (Math.abs(this.vx) < 0.1) this.vx += (Math.random() - 0.5) * 0.05;
+            if (Math.abs(this.vy) < 0.1) this.vy += (Math.random() - 0.5) * 0.05;
+        }
+
+        draw() {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#0ff';
+            ctx.fill();
+            ctx.shadowBlur = 0; // 重置阴影
+        }
+    }
+
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+        particles.push(new Particle());
+    }
+
+    // ==========================================
+    // 动画主循环
+    // ==========================================
+    function animate() {
+        // 绘制带有拖影效果的黑色背景
+        ctx.fillStyle = 'rgba(3, 6, 10, 0.2)';
+        ctx.fillRect(0, 0, width, height);
+
+        // 1. 绘制3D隧道
+        tunnelLines.forEach(line => {
+            line.update();
+            line.draw();
+        });
+
+        // 2. 绘制粒子和连线
+        particles.forEach(p => {
+            p.update();
+            p.draw();
+        });
+
+        // 粒子间连线
+        for (let i = 0; i < particles.length; i++) {
+            for (let j = i + 1; j < particles.length; j++) {
+                let dx = particles[i].x - particles[j].x;
+                let dy = particles[i].y - particles[j].y;
+                let dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < CONNECTION_DIST) {
+                    // 距离越近线越不透明
+                    let opacity = 1 - (dist / CONNECTION_DIST);
+                    ctx.beginPath();
+                    ctx.moveTo(particles[i].x, particles[i].y);
+                    ctx.lineTo(particles[j].x, particles[j].y);
+                    // 连线颜色随距离变化
+                    ctx.strokeStyle = `rgba(255, 0, 255, ${opacity * 0.5})`; 
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // 3. 鼠标吸附光晕 (如果在活动状态)
+        if (mouse.active) {
+            ctx.beginPath();
+            ctx.arc(mouse.x, mouse.y, 50, 0, Math.PI * 2);
+            let gradient = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, 50);
+            gradient.addColorStop(0, 'rgba(0, 255, 255, 0.2)');
+            gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
+            ctx.fillStyle = gradient;
+            ctx.fill();
+        }
+
+        requestAnimationFrame(animate);
+    }
+
+    // 启动
+    animate();
+</script>
+</body>
+</html>
